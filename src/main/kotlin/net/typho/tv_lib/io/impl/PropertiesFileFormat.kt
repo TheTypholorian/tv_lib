@@ -6,15 +6,24 @@ import net.typho.tv_lib.io.DataObjectSerializer.Companion.flatten
 import net.typho.tv_lib.io.DataWithComment
 import net.typho.tv_lib.io.FileFormatException
 
-class PropertyFileFormat(
+class PropertiesFileFormat(
     @JvmField
     val writeComments: Boolean = true,
     @JvmField
+    /**
+     * What delimiter to use ('=' or ':') when *writing* properties files
+     */
     val delimiter: Char = '='
 ) : DataFileFormat {
     override val extension: String
         get() = "properties"
     override val serializers = mutableListOf<DataObjectSerializer<Any>>()
+
+    init {
+        if (delimiter != '=' && delimiter != ':') {
+            throw IllegalArgumentException("Properties file delimiter must be '=' or ';', not '$delimiter'")
+        }
+    }
 
     override fun read(input: String): Map<String, String> {
         val map = mutableMapOf<String, String>()
@@ -26,30 +35,43 @@ class PropertyFileFormat(
             val currentIndex = index++
             var line = lines.next().trimStart()
 
+            // If the line is empty or a comment, skip
             if (line.isBlank() || line.startsWith('!') || line.startsWith('#')) {
                 continue
             }
 
-            line = line.replace("\\\\", "\\")
+            // Fill in custom characters, remove escaped backslashes
+            line = line.replace("\\n", "\n")
+                .replace("\\r", "\r")
+                .replace("\\t", "\t")
+                .replace("\\\\", "\\")
 
+            // Multiline values
             while (line.endsWith('\\')) {
                 index++
-                line = line.substring(0, line.length - 1) + lines.next().trimStart().replace("\\\\", "\\")
+                line = line.substring(0, line.length - 1) + lines.next()
+                    .trimStart()
+                    .replace("\\n", "\n")
+                    .replace("\\r", "\r")
+                    .replace("\\t", "\t")
+                    .replace("\\\\", "\\")
             }
 
+            // Parse the line
             val tokens = line.split('=', ':', limit = 2)
 
             if (tokens.size < 2) {
                 throw FileFormatException("Line $currentIndex is missing a '=' or ':' delimiter: '$line'")
             }
 
-            map[tokens.first().trimEnd()] = tokens.last().trimStart().replace("\\n", "\n").replace("\\r", "\r").replace("\\t", "\t")
+            map[tokens.first().trimEnd()] = tokens.last().trimStart()
         }
 
         return map
     }
 
     override fun write(data: Any): String {
+        // Flatten all values
         val data = serializers.flatten(data) ?: return ""
 
         if (data !is Map<*, *>) {
@@ -58,6 +80,7 @@ class PropertyFileFormat(
 
         val builder = StringBuilder()
 
+        // Handle comments
         fun checkComment(value: Any?): Any? {
             return if (value is DataWithComment) {
                 if (writeComments) {
@@ -69,6 +92,7 @@ class PropertyFileFormat(
         }
 
         data.forEach { (key, value) ->
+            // Key comments should run before value comments
             val key = checkComment(key) ?: throw NullPointerException("Property file keys must not be null")
             val value = checkComment(value) ?: "null"
 
@@ -76,11 +100,16 @@ class PropertyFileFormat(
                 throw IllegalArgumentException("Expected a CharSequence key, got ${key.javaClass.name}")
             }
 
+            // Only primitives and strings are allowed
             if (!value.javaClass.isPrimitive && value !is CharSequence) {
                 throw IllegalArgumentException("Expected a CharSequence or primitive value, got ${value.javaClass.name}")
             }
 
-            builder.appendLine("$key $delimiter ${value.toString().replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")}")
+            // Replace special characters
+            val newValue = value.toString().replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+
+            // Write line
+            builder.appendLine("$key $delimiter $newValue")
         }
 
         return builder.toString()

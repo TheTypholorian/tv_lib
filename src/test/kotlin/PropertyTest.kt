@@ -1,9 +1,9 @@
-import net.typho.tv_lib.io.impl.PropertyFileFormat
+import net.typho.tv_lib.io.impl.PropertiesFileFormat
 
-object Test {
+object PropertyTest {
     @JvmStatic
     fun main(args: Array<String>) {
-        val format = PropertyFileFormat()
+        val format = PropertiesFileFormat()
         val testText = """
             abc=def
              ghi=jkl

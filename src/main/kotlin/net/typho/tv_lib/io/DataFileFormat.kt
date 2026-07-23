@@ -20,4 +20,17 @@ interface DataFileFormat {
      * **Note**: It is the caller's responsibility to close this stream.
      */
     fun write(data: Any, output: OutputStream) = output.write(write(data).toByteArray(Charsets.UTF_8))
+
+    companion object {
+        @JvmStatic
+        fun trimQuotes(text: String): String {
+            return if (text.startsWith('"') && text.endsWith('"')) {
+                text.substring(1, text.length - 1)
+            } else if (text.startsWith('\'') && text.endsWith('\'')) {
+                text.substring(1, text.length - 1)
+            } else {
+                text
+            }
+        }
+    }
 }
