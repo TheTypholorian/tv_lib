@@ -10,7 +10,6 @@ repositories {
 }
 
 dependencies {
-    testImplementation(kotlin("test"))
 }
 
 kotlin {
